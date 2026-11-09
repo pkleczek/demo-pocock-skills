@@ -1,7 +1,8 @@
-package com.example.demo.events.inbound
+package com.example.demo.events.configuration
 
 import com.example.demo.events.application.CreateEvent
-import com.example.demo.events.application.EventRepository
+import com.example.demo.events.application.EventQueries
+import com.example.demo.events.domain.EventRepository
 import com.example.demo.events.application.GetEvent
 import com.example.demo.events.application.ListEvents
 import org.springframework.context.annotation.Bean
@@ -13,8 +14,8 @@ class EventConfiguration {
 	fun createEvent(events: EventRepository) = CreateEvent(events)
 
 	@Bean
-	fun getEvent(events: EventRepository) = GetEvent(events)
+	fun getEvent(events: EventQueries) = GetEvent(events)
 
 	@Bean
-	fun listEvents(events: EventRepository) = ListEvents(events)
+	fun listEvents(events: EventQueries) = ListEvents(events)
 }

@@ -267,25 +267,30 @@ class EventHttpApiTests @Autowired constructor(
 	}
 
 	@Test
-	fun `Bean Validation rejects blank titles before invoking the use case`() {
+	fun `domain title rejections are mapped to client errors`() {
 		mockMvc.perform(
 			post("/api/organizer/events")
 				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(inPersonEventJson(title = " ")),
 		)
-			.andExpect(invalidBodyProblem(mapOf("field" to "title", "message" to "must not be blank")))
+			.andExpect(status().isBadRequest)
+			.andExpect(jsonPath("$.title").value("Invalid Event details"))
+			.andExpect(jsonPath("$.errors[0].field").value("title"))
+			.andExpect(jsonPath("$.errors[0].message").value("must not be blank"))
 	}
 
 	@Test
-	fun `Bean Validation enforces the request title size limit`() {
+	fun `domain title size rejections are mapped to client errors`() {
 		mockMvc.perform(
 			post("/api/organizer/events")
 				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(inPersonEventJson(title = "a".repeat(201))),
 		)
-			.andExpect(invalidBodyProblem(mapOf("field" to "title", "message" to "size must be between 0 and 200")))
+			.andExpect(status().isBadRequest)
+			.andExpect(jsonPath("$.errors[0].field").value("title"))
+			.andExpect(jsonPath("$.errors[0].message").value("must be at most 200 characters"))
 	}
 
 	@Test
@@ -303,7 +308,6 @@ class EventHttpApiTests @Autowired constructor(
 				.content(body),
 		)
 			.andExpect(invalidBodyProblem(
-				mapOf("field" to "title", "message" to "must not be blank"),
 				mapOf("field" to "startAt", "message" to "must use UTC (Z or +00:00)"),
 				mapOf("field" to "endAt", "message" to "must use at most microsecond precision"),
 				mapOf("field" to "timeZone", "message" to "must be a named IANA time-zone ID"),
@@ -637,11 +641,11 @@ class EventHttpApiTests @Autowired constructor(
 			post("/api/events/request-errors/body-validation")
 				.param("page-size", "0")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content(inPersonEventJson(title = " ")),
+				.content(JsonPath.parse(inPersonEventJson()).set("$.timeZone", "invalid-zone").jsonString()),
 		)
 			.andExpect(invalidRequestProblem(listOf(
 				mapOf("field" to "page-size", "message" to "must be greater than or equal to 1"),
-				mapOf("field" to "title", "message" to "must not be blank"),
+				mapOf("field" to "timeZone", "message" to "must be a named IANA time-zone ID"),
 			)))
 	}
 

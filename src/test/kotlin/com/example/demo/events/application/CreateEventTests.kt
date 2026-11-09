@@ -1,6 +1,7 @@
 package com.example.demo.events.application
 
 import com.example.demo.events.domain.Event
+import com.example.demo.events.domain.EventRepository
 import com.example.demo.events.domain.EventAttendance
 import com.example.demo.events.domain.EventCreationResult
 import org.junit.jupiter.api.Test
@@ -48,7 +49,5 @@ class CreateEventTests {
 
 		override fun findById(id: UUID): Event? = error("Unexpected lookup while publishing an Event")
 
-		override fun findPublishedAfter(cursor: EventCursor?, limit: Int): List<Event> =
-			error("Unexpected listing while publishing an Event")
 	}
 }

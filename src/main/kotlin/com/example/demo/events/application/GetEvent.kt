@@ -9,7 +9,7 @@ sealed interface EventLookup {
 }
 
 class GetEvent(
-	private val events: EventRepository,
+	private val events: EventQueries,
 ) {
 	fun execute(id: UUID): EventLookup = events.findById(id)
 		?.let(EventLookup::Found)

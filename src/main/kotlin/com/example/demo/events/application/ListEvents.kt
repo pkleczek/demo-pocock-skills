@@ -15,7 +15,7 @@ data class EventPage(
 )
 
 class ListEvents(
-	private val events: EventRepository,
+	private val events: EventQueries,
 ) {
 	fun execute(limit: Int, cursor: EventCursor?): EventPage {
 		val fetched = events.findPublishedAfter(cursor, limit + 1)

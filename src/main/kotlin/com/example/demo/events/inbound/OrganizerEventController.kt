@@ -10,8 +10,6 @@ import com.example.demo.events.domain.EventCreationResult
 import com.example.demo.events.domain.EventViolation
 import com.example.demo.events.domain.EventStatus
 import jakarta.validation.Valid
-import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.Size
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -56,8 +54,6 @@ class OrganizerEventController(
 
 @ValidEventAttendance
 data class CreateEventRequest(
-	@field:NotBlank
-	@field:Size(max = 200)
 	val title: String,
 	@field:EventTimestamp
 	@field:JsonFormat(without = [JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE])

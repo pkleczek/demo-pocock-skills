@@ -1,7 +1,8 @@
 package com.example.demo.events.outbound
 
 import com.example.demo.events.application.EventCursor
-import com.example.demo.events.application.EventRepository
+import com.example.demo.events.application.EventQueries
+import com.example.demo.events.domain.EventRepository
 import com.example.demo.events.domain.AttendanceMode
 import com.example.demo.events.domain.Event
 import com.example.demo.events.domain.EventAttendance
@@ -20,7 +21,7 @@ import java.util.UUID
 @Repository
 class JooqEventRepository(
 	private val dsl: DSLContext,
-) : EventRepository {
+) : EventRepository, EventQueries {
 	override fun save(event: Event) {
 		dsl.insertInto(EVENTS)
 			.set(EVENTS.ID, event.id)

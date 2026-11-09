@@ -1,6 +1,7 @@
 package com.example.demo.events.application
 
 import com.example.demo.events.domain.Event
+import com.example.demo.events.domain.EventRepository
 import com.example.demo.events.domain.EventAttendance
 import com.example.demo.events.domain.EventCreationResult
 import java.time.Instant
