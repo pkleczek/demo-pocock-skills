@@ -1,3 +1,5 @@
 spring:
   application:
     name: demo
+organizer:
+  api-key: ${ORGANIZER_API_KEY:}

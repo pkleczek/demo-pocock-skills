@@ -18,11 +18,15 @@ repositories {
 	mavenCentral()
 }
 
+val jooqCodegenVersion = "3.21.9"
+val jooqCodegenSourceSet = sourceSets.create("jooqCodegen") {
+	java.srcDir("src/jooqCodegen/java")
+}
+
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	implementation("org.springframework.boot:spring-boot-starter-jooq")
-	implementation("org.springframework.boot:spring-boot-starter-mongodb")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.flywaydb:flyway-database-postgresql")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
@@ -32,14 +36,22 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-jooq-test")
-	testImplementation("org.springframework.boot:spring-boot-starter-mongodb-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
 	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
-	testImplementation("org.testcontainers:testcontainers-mongodb")
 	testImplementation("org.testcontainers:testcontainers-postgresql")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+	add(jooqCodegenSourceSet.implementationConfigurationName, "org.jooq:jooq-codegen:$jooqCodegenVersion")
+	add(
+		jooqCodegenSourceSet.implementationConfigurationName,
+		platform("org.springframework.boot:spring-boot-dependencies:4.1.2"),
+	)
+	add(jooqCodegenSourceSet.implementationConfigurationName, "org.flywaydb:flyway-core")
+	add(jooqCodegenSourceSet.implementationConfigurationName, "org.flywaydb:flyway-database-postgresql")
+	add(jooqCodegenSourceSet.implementationConfigurationName, "org.testcontainers:testcontainers-postgresql")
+	add(jooqCodegenSourceSet.runtimeOnlyConfigurationName, "org.postgresql:postgresql")
 }
 
 kotlin {
@@ -50,4 +62,33 @@ kotlin {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+val generatedJooqDirectory = layout.buildDirectory.dir("generated/sources/jooq/main")
+sourceSets.named("main") {
+	java.srcDir(generatedJooqDirectory)
+}
+
+val generateJooq by tasks.registering(JavaExec::class) {
+	group = "code generation"
+	description = "Runs Flyway migrations in PostgreSQL Testcontainers and generates jOOQ sources."
+	dependsOn(tasks.named(jooqCodegenSourceSet.classesTaskName))
+	classpath = jooqCodegenSourceSet.runtimeClasspath
+	mainClass.set("com.example.demo.codegen.GenerateJooq")
+	args(
+		layout.projectDirectory.dir("src/main/resources/db/migration").asFile.absolutePath,
+		generatedJooqDirectory.get().asFile.absolutePath,
+	)
+	inputs.dir(layout.projectDirectory.dir("src/main/resources/db/migration"))
+	inputs.files(jooqCodegenSourceSet.allSource)
+	inputs.property("jooqCodegenVersion", jooqCodegenVersion)
+	outputs.dir(generatedJooqDirectory)
+}
+
+tasks.named("compileKotlin") {
+	dependsOn(generateJooq)
+}
+
+tasks.named("compileJava") {
+	dependsOn(generateJooq)
 }
