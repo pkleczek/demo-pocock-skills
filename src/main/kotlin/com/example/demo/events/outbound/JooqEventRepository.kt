@@ -6,6 +6,8 @@ import com.example.demo.events.domain.AttendanceMode
 import com.example.demo.events.domain.Event
 import com.example.demo.events.domain.EventAttendance
 import com.example.demo.events.domain.EventStatus
+import com.example.demo.events.domain.EventTitle
+import com.example.demo.events.domain.EventTitleCreationResult
 import com.example.demo.events.outbound.jooq.Tables.EVENTS
 import com.example.demo.events.outbound.jooq.tables.records.EventsRecord
 import org.jooq.DSLContext
@@ -22,7 +24,7 @@ class JooqEventRepository(
 	override fun save(event: Event) {
 		dsl.insertInto(EVENTS)
 			.set(EVENTS.ID, event.id)
-			.set(EVENTS.TITLE, event.title)
+			.set(EVENTS.TITLE, event.title.value)
 			.set(EVENTS.DESCRIPTION, event.description)
 			.set(EVENTS.START_AT, event.startAt.atOffset(ZoneOffset.UTC))
 			.set(EVENTS.END_AT, event.endAt.atOffset(ZoneOffset.UTC))
@@ -63,9 +65,13 @@ class JooqEventRepository(
 			AttendanceMode.IN_PERSON -> EventAttendance.InPerson(requireNotNull(record.location))
 			AttendanceMode.ONLINE -> EventAttendance.Online(URI.create(requireNotNull(record.joinUrl)))
 		}
+		val title = when (val result = EventTitle.create(record.title)) {
+			is EventTitleCreationResult.Created -> result.title
+			is EventTitleCreationResult.Rejected -> error("Invalid title in persisted Event ${record.id}")
+		}
 		return Event.reconstitute(
 			id = record.id,
-			title = record.title,
+			title = title,
 			description = record.description,
 			startAt = record.startAt.toInstant(),
 			endAt = record.endAt.toInstant(),

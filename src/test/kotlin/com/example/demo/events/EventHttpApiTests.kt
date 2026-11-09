@@ -4,8 +4,12 @@ import com.jayway.jsonpath.JsonPath
 import com.example.demo.TestcontainersConfiguration
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Import
 import org.springframework.http.HttpHeaders
@@ -17,14 +21,23 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.util.UUID
+import kotlin.test.assertEquals
 
 @Import(TestcontainersConfiguration::class)
 @AutoConfigureMockMvc
-@SpringBootTest(properties = ["organizer.api-key=test-organizer-key"])
+@SpringBootTest(
+	webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+	properties = ["organizer.api-key=test-organizer-key"],
+)
 class EventHttpApiTests @Autowired constructor(
 	private val mockMvc: MockMvc,
 	private val jdbcTemplate: JdbcTemplate,
+	@LocalServerPort private val port: Int,
 ) {
 	@BeforeEach
 	fun clearEvents() {
@@ -44,6 +57,29 @@ class EventHttpApiTests @Autowired constructor(
 				.header(HttpHeaders.AUTHORIZATION, "Bearer wrong-organizer-key"),
 		)
 			.andExpect(status().isUnauthorized)
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = [
+		"/api/organizer/events",
+		"/api/%6frganizer/events",
+		"/api/organizer;x=1/events",
+		"/api;x=1/organizer/events",
+		"/api/%6frganizer;x=1/events",
+	])
+	fun `Organizer authentication applies to every routed spelling of the path`(path: String) {
+		HttpClient.newHttpClient().use { client ->
+			for (credential in listOf(null, "Bearer wrong-organizer-key", "Bearer test-organizer-key")) {
+				val request = HttpRequest.newBuilder(URI.create("http://localhost:$port$path"))
+					.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+					.POST(HttpRequest.BodyPublishers.ofString(inPersonEventJson()))
+				if (credential != null) request.header(HttpHeaders.AUTHORIZATION, credential)
+
+				val response = client.send(request.build(), HttpResponse.BodyHandlers.ofString())
+				val expectedStatus = if (credential == "Bearer test-organizer-key") 201 else 401
+				assertEquals(expectedStatus, response.statusCode(), "Unexpected authentication result for $path")
+			}
+		}
 	}
 
 	@Test
@@ -134,28 +170,46 @@ class EventHttpApiTests @Autowired constructor(
 			.andExpect(jsonPath("$.detail").isNotEmpty)
 	}
 
-	@Test
-	fun `Organizer receives a clear validation error when the Event ends before it starts`() {
+	@ParameterizedTest
+	@CsvSource(
+		"2027-05-10T16:00:00.123456789Z, 2027-05-10T18:00:00Z, startAt",
+		"2027-05-10T16:00:00Z, 2027-05-10T18:00:00.123456789Z, endAt",
+		"2027-05-10T16:00:00.000000100Z, 2027-05-10T16:00:00.000000200Z, startAt",
+	)
+	fun `timestamps finer than microseconds receive a clear validation error`(
+		startAt: String,
+		endAt: String,
+		field: String,
+	) {
 		mockMvc.perform(
 			post("/api/organizer/events")
 				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content(
-					"""
-					{
-					  "title": "Backwards Event",
-					  "startAt": "2027-10-12T18:00:00Z",
-					  "endAt": "2027-10-12T17:00:00Z",
-					  "timeZone": "America/Los_Angeles",
-					  "attendanceMode": "IN_PERSON",
-					  "location": "Test location"
-					}
-					""".trimIndent(),
-				),
+				.content(inPersonEventJson(startAt = startAt, endAt = endAt)),
 		)
 			.andExpect(status().isBadRequest)
+			.andExpect(jsonPath("$.errors[0].field").value(field))
+			.andExpect(jsonPath("$.errors[0].message").value("must use at most microsecond precision"))
+
+		mockMvc.perform(get("/api/events"))
+			.andExpect(status().isOk)
+			.andExpect(jsonPath("$.items.length()").value(0))
+	}
+
+	@Test
+	fun `domain rejections are mapped to structured client errors`() {
+		mockMvc.perform(
+			post("/api/organizer/events")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(inPersonEventJson(endAt = "2027-05-10T15:00:00Z")),
+		)
+			.andExpect(status().isBadRequest)
+			.andExpect(header().string(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PROBLEM_JSON_VALUE))
 			.andExpect(jsonPath("$.status").value(400))
+			.andExpect(jsonPath("$.title").value("Invalid Event details"))
 			.andExpect(jsonPath("$.errors[0].field").value("endAt"))
+			.andExpect(jsonPath("$.errors[0].message").value("must be after startAt"))
 	}
 
 	@Test
@@ -240,8 +294,8 @@ class EventHttpApiTests @Autowired constructor(
 					"""
 					{
 					  "title": "Accessible Public Event",
-					  "startAt": "2027-06-12T15:00:00Z",
-					  "endAt": "2027-06-12T17:00:00Z",
+					  "startAt": "2027-06-12T15:00:00.123456000Z",
+					  "endAt": "2027-06-12T17:00:00.654321Z",
 					  "timeZone": "America/Los_Angeles",
 					  "attendanceMode": "IN_PERSON",
 					  "location": "Rose Garden, Portland"
@@ -249,6 +303,8 @@ class EventHttpApiTests @Autowired constructor(
 					""".trimIndent(),
 			)
 		).andExpect(status().isCreated)
+			.andExpect(jsonPath("$.startAt").value("2027-06-12T15:00:00.123456Z"))
+			.andExpect(jsonPath("$.endAt").value("2027-06-12T17:00:00.654321Z"))
 			.andReturn()
 
 		val eventId = createResponse.response.getHeader(HttpHeaders.LOCATION)!!
@@ -258,8 +314,8 @@ class EventHttpApiTests @Autowired constructor(
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.id").value(eventId))
 			.andExpect(jsonPath("$.title").value("Accessible Public Event"))
-			.andExpect(jsonPath("$.startAt").value("2027-06-12T15:00:00Z"))
-			.andExpect(jsonPath("$.endAt").value("2027-06-12T17:00:00Z"))
+			.andExpect(jsonPath("$.startAt").value("2027-06-12T15:00:00.123456Z"))
+			.andExpect(jsonPath("$.endAt").value("2027-06-12T17:00:00.654321Z"))
 			.andExpect(jsonPath("$.timeZone").value("America/Los_Angeles"))
 			.andExpect(jsonPath("$.attendanceMode").value("IN_PERSON"))
 			.andExpect(jsonPath("$.location").value("Rose Garden, Portland"))
@@ -339,23 +395,27 @@ class EventHttpApiTests @Autowired constructor(
 			.andExpect(jsonPath("$.errors[0].field").value("cursor"))
 	}
 
+	private fun inPersonEventJson(
+		title: String = "Test Event",
+		startAt: String = "2027-05-10T16:00:00Z",
+		endAt: String = "2027-05-10T18:00:00Z",
+	): String = """
+		{
+		  "title": "$title",
+		  "startAt": "$startAt",
+		  "endAt": "$endAt",
+		  "timeZone": "America/Los_Angeles",
+		  "attendanceMode": "IN_PERSON",
+		  "location": "Test location"
+		}
+		""".trimIndent()
+
 	private fun publishInPersonEvent(title: String, startAt: String, endAt: String): String {
 		val response = mockMvc.perform(
 			post("/api/organizer/events")
 				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content(
-					"""
-					{
-					  "title": "$title",
-					  "startAt": "$startAt",
-					  "endAt": "$endAt",
-					  "timeZone": "America/Los_Angeles",
-					  "attendanceMode": "IN_PERSON",
-					  "location": "Test location"
-					}
-					""".trimIndent(),
-				),
+				.content(inPersonEventJson(title, startAt, endAt)),
 		)
 			.andExpect(status().isCreated)
 			.andReturn()

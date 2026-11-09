@@ -39,7 +39,7 @@ sealed interface EventAttendance {
 
 class Event private constructor(
 	val id: UUID,
-	val title: String,
+	val title: EventTitle,
 	val description: String?,
 	val startAt: Instant,
 	val endAt: Instant,
@@ -61,10 +61,6 @@ class Event private constructor(
 			attendance: EventAttendance,
 		): EventCreationResult {
 			val violations = buildList {
-				if (title.isBlank()) add(EventViolation("title", "must not be blank"))
-				if (title.length > MAX_TITLE_LENGTH) {
-					add(EventViolation("title", "must be at most $MAX_TITLE_LENGTH characters"))
-				}
 				if (!endAt.isAfter(startAt)) add(EventViolation("endAt", "must be after startAt"))
 				when (attendance) {
 					is EventAttendance.InPerson -> if (attendance.location.isBlank()) {
@@ -76,16 +72,21 @@ class Event private constructor(
 				}
 			}
 
-			if (violations.isNotEmpty()) return EventCreationResult.Rejected(violations)
-
-			return EventCreationResult.Created(
-				Event(id, title, description, startAt, endAt, timeZone, attendance, EventStatus.PUBLISHED),
-			)
+			return when (val result = EventTitle.create(title)) {
+				is EventTitleCreationResult.Rejected -> EventCreationResult.Rejected(result.violations + violations)
+				is EventTitleCreationResult.Created -> if (violations.isNotEmpty()) {
+					EventCreationResult.Rejected(violations)
+				} else {
+					EventCreationResult.Created(
+						Event(id, result.title, description, startAt, endAt, timeZone, attendance, EventStatus.PUBLISHED),
+					)
+				}
+			}
 		}
 
 		internal fun reconstitute(
 			id: UUID,
-			title: String,
+			title: EventTitle,
 			description: String?,
 			startAt: Instant,
 			endAt: Instant,
@@ -93,8 +94,6 @@ class Event private constructor(
 			attendance: EventAttendance,
 			status: EventStatus,
 		): Event = Event(id, title, description, startAt, endAt, timeZone, attendance, status)
-
-		private const val MAX_TITLE_LENGTH = 200
 	}
 }
 

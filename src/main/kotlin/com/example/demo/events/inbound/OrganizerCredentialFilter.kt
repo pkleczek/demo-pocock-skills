@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpHeaders
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
+import org.springframework.web.util.ServletRequestPathUtils
+import org.springframework.web.util.pattern.PathPatternParser
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
@@ -16,8 +18,9 @@ class OrganizerCredentialFilter(
 ) : OncePerRequestFilter() {
 
 	override fun shouldNotFilter(request: HttpServletRequest): Boolean {
-		val path = request.requestURI.removePrefix(request.contextPath)
-		return path != ORGANIZER_PATH && !path.startsWith("$ORGANIZER_PATH/")
+		// Match decoded segments and matrix parameters the same way as Spring MVC.
+		val path = ServletRequestPathUtils.parseAndCache(request).pathWithinApplication()
+		return !ORGANIZER_PATH.matches(path)
 	}
 
 	override fun doFilterInternal(
@@ -48,7 +51,7 @@ class OrganizerCredentialFilter(
 	}
 
 	private companion object {
-		const val ORGANIZER_PATH = "/api/organizer"
+		val ORGANIZER_PATH = PathPatternParser.defaultInstance.parse("/api/organizer/**")
 		const val BEARER_PREFIX = "Bearer "
 	}
 }

@@ -146,6 +146,11 @@ data class CreateEventRequest(
 			violations += EventViolation(field, "must use UTC (Z or +00:00)")
 			return null
 		}
+		// PostgreSQL stores microseconds; reject values it would silently round.
+		if (parsed.nano % 1_000 != 0) {
+			violations += EventViolation(field, "must use at most microsecond precision")
+			return null
+		}
 		return parsed.toInstant()
 	}
 }
@@ -169,7 +174,7 @@ data class EventResponse(
 	companion object {
 		fun from(event: Event) = EventResponse(
 			id = event.id,
-			title = event.title,
+			title = event.title.value,
 			description = event.description,
 			startAt = event.startAt.toString(),
 			endAt = event.endAt.toString(),
