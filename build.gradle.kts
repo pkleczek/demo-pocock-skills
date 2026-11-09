@@ -18,7 +18,6 @@ repositories {
 	mavenCentral()
 }
 
-val jooqCodegenVersion = "3.21.9"
 val jooqCodegenSourceSet = sourceSets.create("jooqCodegen") {
 	java.srcDir("src/jooqCodegen/java")
 }
@@ -27,6 +26,8 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	implementation("org.springframework.boot:spring-boot-starter-jooq")
+	implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.flywaydb:flyway-database-postgresql")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
@@ -43,11 +44,7 @@ dependencies {
 	testImplementation("org.testcontainers:testcontainers-postgresql")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-	add(jooqCodegenSourceSet.implementationConfigurationName, "org.jooq:jooq-codegen:$jooqCodegenVersion")
-	add(
-		jooqCodegenSourceSet.implementationConfigurationName,
-		platform("org.springframework.boot:spring-boot-dependencies:4.1.2"),
-	)
+	add(jooqCodegenSourceSet.implementationConfigurationName, "org.jooq:jooq-codegen")
 	add(jooqCodegenSourceSet.implementationConfigurationName, "org.flywaydb:flyway-core")
 	add(jooqCodegenSourceSet.implementationConfigurationName, "org.flywaydb:flyway-database-postgresql")
 	add(jooqCodegenSourceSet.implementationConfigurationName, "org.testcontainers:testcontainers-postgresql")
@@ -81,7 +78,6 @@ val generateJooq by tasks.registering(JavaExec::class) {
 	)
 	inputs.dir(layout.projectDirectory.dir("src/main/resources/db/migration"))
 	inputs.files(jooqCodegenSourceSet.allSource)
-	inputs.property("jooqCodegenVersion", jooqCodegenVersion)
 	outputs.dir(generatedJooqDirectory)
 }
 

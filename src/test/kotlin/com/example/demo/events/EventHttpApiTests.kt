@@ -25,6 +25,7 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.util.Base64
 import java.util.UUID
 import kotlin.test.assertEquals
 
@@ -63,9 +64,6 @@ class EventHttpApiTests @Autowired constructor(
 	@ValueSource(strings = [
 		"/api/organizer/events",
 		"/api/%6frganizer/events",
-		"/api/organizer;x=1/events",
-		"/api;x=1/organizer/events",
-		"/api/%6frganizer;x=1/events",
 	])
 	fun `Organizer authentication applies to every routed spelling of the path`(path: String) {
 		HttpClient.newHttpClient().use { client ->
@@ -80,6 +78,29 @@ class EventHttpApiTests @Autowired constructor(
 				assertEquals(expectedStatus, response.statusCode(), "Unexpected authentication result for $path")
 			}
 		}
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = [
+		"/api/organizer;x=1/events",
+		"/api;x=1/organizer/events",
+		"/api/%6frganizer;x=1/events",
+	])
+	fun `Spring Security firewall rejects matrix-parameter paths even with valid credentials`(path: String) {
+		HttpClient.newHttpClient().use { client ->
+			for (credential in listOf(null, "Bearer test-organizer-key")) {
+				val request = HttpRequest.newBuilder(URI.create("http://localhost:$port$path"))
+					.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+					.POST(HttpRequest.BodyPublishers.ofString(inPersonEventJson()))
+				if (credential != null) request.header(HttpHeaders.AUTHORIZATION, credential)
+
+				val response = client.send(request.build(), HttpResponse.BodyHandlers.ofString())
+				assertEquals(400, response.statusCode(), "Unsafe path must be rejected: $path")
+			}
+		}
+		mockMvc.perform(get("/api/events"))
+			.andExpect(status().isOk)
+			.andExpect(jsonPath("$.items.length()").value(0))
 	}
 
 	@Test
@@ -188,8 +209,10 @@ class EventHttpApiTests @Autowired constructor(
 				.content(inPersonEventJson(startAt = startAt, endAt = endAt)),
 		)
 			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.errors[0].field").value(field))
-			.andExpect(jsonPath("$.errors[0].message").value("must use at most microsecond precision"))
+			.andExpect(jsonPath("$.errors[*].field").value(org.hamcrest.Matchers.hasItem(field)))
+			.andExpect(jsonPath("$.errors[*].message").value(
+				org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.equalTo("must use at most microsecond precision")),
+			))
 
 		mockMvc.perform(get("/api/events"))
 			.andExpect(status().isOk)
@@ -210,6 +233,87 @@ class EventHttpApiTests @Autowired constructor(
 			.andExpect(jsonPath("$.title").value("Invalid Event details"))
 			.andExpect(jsonPath("$.errors[0].field").value("endAt"))
 			.andExpect(jsonPath("$.errors[0].message").value("must be after startAt"))
+	}
+
+	@Test
+	fun `Bean Validation rejects blank titles before invoking the use case`() {
+		mockMvc.perform(
+			post("/api/organizer/events")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(inPersonEventJson(title = " ")),
+		)
+			.andExpect(status().isBadRequest)
+			.andExpect(jsonPath("$.title").value("Invalid request"))
+			.andExpect(jsonPath("$.errors[0].field").value("title"))
+	}
+
+	@Test
+	fun `Bean Validation enforces the request title size limit`() {
+		mockMvc.perform(
+			post("/api/organizer/events")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(inPersonEventJson(title = "a".repeat(201))),
+		)
+			.andExpect(status().isBadRequest)
+			.andExpect(jsonPath("$.title").value("Invalid request"))
+			.andExpect(jsonPath("$.errors[0].field").value("title"))
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = ["title", "startAt", "endAt", "timeZone", "attendanceMode"])
+	fun `missing required request properties receive a client error`(field: String) {
+		val body = JsonPath.parse(inPersonEventJson()).delete("$.$field").jsonString()
+		mockMvc.perform(
+			post("/api/organizer/events")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body),
+		)
+			.andExpect(status().isBadRequest)
+			.andExpect(jsonPath("$.status").value(400))
+			.andExpect(jsonPath("$.detail").isNotEmpty)
+	}
+
+	@ParameterizedTest
+	@CsvSource(
+		"startAt, not-a-timestamp",
+		"startAt, 2027-02-30T16:00:00Z",
+		"startAt, 2027-05-10T16:00:00",
+		"endAt, not-a-timestamp",
+		"attendanceMode, HYBRID",
+		"joinUrl, https://meet.example.test/a b",
+	)
+	fun `Spring rejects malformed typed request properties`(field: String, value: String) {
+		val body = JsonPath.parse(inPersonEventJson()).put("$", field, value).jsonString()
+		mockMvc.perform(
+			post("/api/organizer/events")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body),
+		)
+			.andExpect(status().isBadRequest)
+			.andExpect(jsonPath("$.status").value(400))
+			.andExpect(jsonPath("$.detail").isNotEmpty)
+	}
+
+	@ParameterizedTest
+	@CsvSource("IN_PERSON, location", "ONLINE, joinUrl")
+	fun `Bean Validation requires the attendance-mode-specific property`(mode: String, field: String) {
+		val body = JsonPath.parse(inPersonEventJson())
+			.set("$.attendanceMode", mode)
+			.delete("$.location")
+			.jsonString()
+		mockMvc.perform(
+			post("/api/organizer/events")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body),
+		)
+			.andExpect(status().isBadRequest)
+			.andExpect(jsonPath("$.title").value("Invalid request"))
+			.andExpect(jsonPath("$.errors[0].field").value(field))
 	}
 
 	@Test
@@ -259,8 +363,9 @@ class EventHttpApiTests @Autowired constructor(
 			.andExpect(jsonPath("$.errors[0].field").value("timeZone"))
 	}
 
-	@Test
-	fun `Organizer cannot create a hybrid Event`() {
+	@ParameterizedTest
+	@CsvSource("IN_PERSON, joinUrl", "ONLINE, location")
+	fun `Bean Validation rejects attendance details for the wrong mode`(mode: String, field: String) {
 		mockMvc.perform(
 			post("/api/organizer/events")
 				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
@@ -272,7 +377,7 @@ class EventHttpApiTests @Autowired constructor(
 					  "startAt": "2027-10-12T16:00:00Z",
 					  "endAt": "2027-10-12T18:00:00Z",
 					  "timeZone": "America/Los_Angeles",
-					  "attendanceMode": "IN_PERSON",
+					  "attendanceMode": "$mode",
 					  "location": "Test venue",
 					  "joinUrl": "https://meet.example.test/hybrid-room"
 					}
@@ -281,7 +386,7 @@ class EventHttpApiTests @Autowired constructor(
 		)
 			.andExpect(status().isBadRequest)
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.errors[0].field").value("joinUrl"))
+			.andExpect(jsonPath("$.errors[0].field").value(field))
 	}
 
 	@Test
@@ -379,19 +484,41 @@ class EventHttpApiTests @Autowired constructor(
 			.andExpect(jsonPath("$.status").value("CANCELLED"))
 	}
 
-	@Test
-	fun `public event list rejects a page size above the supported maximum`() {
-		mockMvc.perform(get("/api/events").param("limit", "101"))
+	@ParameterizedTest
+	@ValueSource(ints = [-1, 0, 101])
+	fun `Bean Validation enforces the public event list page size`(limit: Int) {
+		mockMvc.perform(get("/api/events").param("limit", limit.toString()))
 			.andExpect(status().isBadRequest)
 			.andExpect(jsonPath("$.status").value(400))
 			.andExpect(jsonPath("$.errors[0].field").value("limit"))
 	}
 
+	@ParameterizedTest
+	@ValueSource(strings = ["abc", "2147483648"])
+	fun `Spring rejects page sizes that cannot bind to an integer`(limit: String) {
+		mockMvc.perform(get("/api/events").param("limit", limit))
+			.andExpect(status().isBadRequest)
+			.andExpect(jsonPath("$.errors[0].field").value("limit"))
+	}
+
 	@Test
 	fun `public event list rejects an invalid cursor`() {
-		mockMvc.perform(get("/api/events").param("cursor", "not-a-cursor"))
+		mockMvc.perform(get("/api/events").param("cursor", "%%%"))
 			.andExpect(status().isBadRequest)
 			.andExpect(jsonPath("$.status").value(400))
+			.andExpect(jsonPath("$.errors[0].field").value("cursor"))
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = [
+		"missing-separator",
+		"not-a-timestamp|5319b0e7-387c-40c6-8edc-b4b11fb89c86",
+		"2027-05-10T16:00:00Z|not-a-uuid",
+	])
+	fun `Spring cursor binding rejects malformed cursor contents`(contents: String) {
+		val cursor = Base64.getUrlEncoder().withoutPadding().encodeToString(contents.toByteArray(Charsets.UTF_8))
+		mockMvc.perform(get("/api/events").param("cursor", cursor))
+			.andExpect(status().isBadRequest)
 			.andExpect(jsonPath("$.errors[0].field").value("cursor"))
 	}
 

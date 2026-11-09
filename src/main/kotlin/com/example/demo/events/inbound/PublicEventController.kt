@@ -4,16 +4,16 @@ import com.example.demo.events.application.EventCursor
 import com.example.demo.events.application.EventLookup
 import com.example.demo.events.application.GetEvent
 import com.example.demo.events.application.ListEvents
-import org.springframework.http.HttpStatus
-import org.springframework.http.MediaType
-import org.springframework.http.ProblemDetail
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
+import org.springframework.core.convert.converter.Converter
 import org.springframework.http.ResponseEntity
+import org.springframework.stereotype.Component
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
-import java.time.DateTimeException
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
@@ -26,33 +26,18 @@ class PublicEventController(
 ) {
 	@GetMapping
 	fun list(
+		@Min(1)
+		@Max(MAX_PAGE_SIZE.toLong())
 		@RequestParam(name = "limit", defaultValue = DEFAULT_PAGE_SIZE.toString()) limit: Int,
-		@RequestParam(name = "cursor", required = false) cursor: String?,
+		@RequestParam(name = "cursor", required = false) cursor: EventCursor?,
 	): ResponseEntity<*> {
-		if (limit !in 1..MAX_PAGE_SIZE) {
-			return invalidRequest("limit", "must be between 1 and $MAX_PAGE_SIZE")
-		}
-		val decodedCursor = when (val decoded = cursor?.let(EventCursorCodec::decode)) {
-			is CursorDecodeResult.Valid -> decoded.cursor
-			CursorDecodeResult.Invalid -> return invalidRequest("cursor", "must be a valid cursor")
-			null -> null
-		}
-		val page = listEvents.execute(limit, decodedCursor)
+		val page = listEvents.execute(limit, cursor)
 		return ResponseEntity.ok(
 			EventListResponse(
 				items = page.events.map(EventResponse::from),
 				nextCursor = page.nextCursor?.let(EventCursorCodec::encode),
 			),
 		)
-	}
-
-	private fun invalidRequest(field: String, message: String): ResponseEntity<ProblemDetail> {
-		val problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Event list parameters are invalid")
-		problem.title = "Invalid Event list request"
-		problem.setProperty("errors", listOf(mapOf("field" to field, "message" to message)))
-		return ResponseEntity.badRequest()
-			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
-			.body(problem)
 	}
 
 	@GetMapping("/{id}")
@@ -79,29 +64,15 @@ private object EventCursorCodec {
 			.encodeToString(value.toByteArray(Charsets.UTF_8))
 	}
 
-	fun decode(cursor: String): CursorDecodeResult {
-		return try {
-			val value = String(Base64.getUrlDecoder().decode(cursor), Charsets.UTF_8)
-			val fields = value.split('|')
-			if (fields.size != 2) {
-				CursorDecodeResult.Invalid
-			} else {
-				CursorDecodeResult.Valid(
-					EventCursor(
-						startAt = Instant.parse(fields[0]),
-						id = UUID.fromString(fields[1]),
-					),
-				)
-			}
-		} catch (_: IllegalArgumentException) {
-			CursorDecodeResult.Invalid
-		} catch (_: DateTimeException) {
-			CursorDecodeResult.Invalid
-		}
+	fun decode(cursor: String): EventCursor {
+		val value = String(Base64.getUrlDecoder().decode(cursor), Charsets.UTF_8)
+		val fields = value.split('|')
+		require(fields.size == 2) { "must be a valid cursor" }
+		return EventCursor(startAt = Instant.parse(fields[0]), id = UUID.fromString(fields[1]))
 	}
 }
 
-private sealed interface CursorDecodeResult {
-	data class Valid(val cursor: EventCursor) : CursorDecodeResult
-	data object Invalid : CursorDecodeResult
+@Component
+class EventCursorConverter : Converter<String, EventCursor> {
+	override fun convert(source: String): EventCursor = EventCursorCodec.decode(source)
 }
