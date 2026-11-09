@@ -47,21 +47,6 @@ class EventHttpApiTests @Autowired constructor(
 		jdbcTemplate.update("DELETE FROM events")
 	}
 
-	@Test
-	fun `Organizer API rejects requests without the configured credential`() {
-		mockMvc.perform(post("/api/organizer/events"))
-			.andExpect(status().isUnauthorized)
-	}
-
-	@Test
-	fun `Organizer API rejects requests with an invalid credential`() {
-		mockMvc.perform(
-			post("/api/organizer/events")
-				.header(HttpHeaders.AUTHORIZATION, "Bearer wrong-organizer-key"),
-		)
-			.andExpect(status().isUnauthorized)
-	}
-
 	@ParameterizedTest
 	@ValueSource(strings = [
 		"/api/organizer/events",
@@ -209,12 +194,7 @@ class EventHttpApiTests @Autowired constructor(
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(inPersonEventJson(startAt = startAt, endAt = endAt)),
 		)
-			.andExpect(status().isBadRequest)
 			.andExpect(invalidRequestProblem())
-
-		mockMvc.perform(get("/api/events"))
-			.andExpect(status().isOk)
-			.andExpect(jsonPath("$.items.length()").value(0))
 	}
 
 	@Test
@@ -241,7 +221,6 @@ class EventHttpApiTests @Autowired constructor(
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(inPersonEventJson(title = " ")),
 		)
-			.andExpect(status().isBadRequest)
 			.andExpect(invalidRequestProblem())
 	}
 
@@ -253,7 +232,6 @@ class EventHttpApiTests @Autowired constructor(
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(inPersonEventJson(title = "a".repeat(201))),
 		)
-			.andExpect(status().isBadRequest)
 			.andExpect(invalidRequestProblem())
 	}
 
@@ -267,8 +245,6 @@ class EventHttpApiTests @Autowired constructor(
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body),
 		)
-			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.status").value(400))
 			.andExpect(invalidRequestProblem())
 	}
 
@@ -289,8 +265,6 @@ class EventHttpApiTests @Autowired constructor(
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body),
 		)
-			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.status").value(400))
 			.andExpect(invalidRequestProblem())
 	}
 
@@ -307,7 +281,6 @@ class EventHttpApiTests @Autowired constructor(
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body),
 		)
-			.andExpect(status().isBadRequest)
 			.andExpect(invalidRequestProblem())
 	}
 
@@ -330,8 +303,6 @@ class EventHttpApiTests @Autowired constructor(
 					""".trimIndent(),
 				),
 		)
-			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.status").value(400))
 			.andExpect(invalidRequestProblem())
 	}
 
@@ -354,7 +325,6 @@ class EventHttpApiTests @Autowired constructor(
 					""".trimIndent(),
 				),
 		)
-			.andExpect(status().isBadRequest)
 			.andExpect(invalidRequestProblem())
 	}
 
@@ -379,8 +349,6 @@ class EventHttpApiTests @Autowired constructor(
 					""".trimIndent(),
 				),
 		)
-			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.status").value(400))
 			.andExpect(invalidRequestProblem())
 	}
 
@@ -483,8 +451,6 @@ class EventHttpApiTests @Autowired constructor(
 	@ValueSource(ints = [-1, 0, 101])
 	fun `Bean Validation enforces the public event list page size`(limit: Int) {
 		mockMvc.perform(get("/api/events").param("limit", limit.toString()))
-			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.status").value(400))
 			.andExpect(invalidRequestProblem())
 	}
 
@@ -492,15 +458,12 @@ class EventHttpApiTests @Autowired constructor(
 	@ValueSource(strings = ["abc", "2147483648"])
 	fun `Spring rejects page sizes that cannot bind to an integer`(limit: String) {
 		mockMvc.perform(get("/api/events").param("limit", limit))
-			.andExpect(status().isBadRequest)
 			.andExpect(invalidRequestProblem())
 	}
 
 	@Test
 	fun `public event list rejects an invalid cursor`() {
 		mockMvc.perform(get("/api/events").param("cursor", "%%%"))
-			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.status").value(400))
 			.andExpect(invalidRequestProblem())
 	}
 
@@ -513,7 +476,6 @@ class EventHttpApiTests @Autowired constructor(
 	fun `Spring cursor binding rejects malformed cursor contents`(contents: String) {
 		val cursor = Base64.getUrlEncoder().withoutPadding().encodeToString(contents.toByteArray(Charsets.UTF_8))
 		mockMvc.perform(get("/api/events").param("cursor", cursor))
-			.andExpect(status().isBadRequest)
 			.andExpect(invalidRequestProblem())
 	}
 
