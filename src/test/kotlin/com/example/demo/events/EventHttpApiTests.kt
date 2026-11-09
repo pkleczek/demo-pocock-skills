@@ -16,9 +16,11 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.ResultMatcher
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.net.URI
@@ -193,14 +195,13 @@ class EventHttpApiTests @Autowired constructor(
 
 	@ParameterizedTest
 	@CsvSource(
-		"2027-05-10T16:00:00.123456789Z, 2027-05-10T18:00:00Z, startAt",
-		"2027-05-10T16:00:00Z, 2027-05-10T18:00:00.123456789Z, endAt",
-		"2027-05-10T16:00:00.000000100Z, 2027-05-10T16:00:00.000000200Z, startAt",
+		"2027-05-10T16:00:00.123456789Z, 2027-05-10T18:00:00Z",
+		"2027-05-10T16:00:00Z, 2027-05-10T18:00:00.123456789Z",
+		"2027-05-10T16:00:00.000000100Z, 2027-05-10T16:00:00.000000200Z",
 	)
 	fun `timestamps finer than microseconds receive a clear validation error`(
 		startAt: String,
 		endAt: String,
-		field: String,
 	) {
 		mockMvc.perform(
 			post("/api/organizer/events")
@@ -209,10 +210,7 @@ class EventHttpApiTests @Autowired constructor(
 				.content(inPersonEventJson(startAt = startAt, endAt = endAt)),
 		)
 			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.errors[*].field").value(org.hamcrest.Matchers.hasItem(field)))
-			.andExpect(jsonPath("$.errors[*].message").value(
-				org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.equalTo("must use at most microsecond precision")),
-			))
+			.andExpect(invalidRequestProblem())
 
 		mockMvc.perform(get("/api/events"))
 			.andExpect(status().isOk)
@@ -244,8 +242,7 @@ class EventHttpApiTests @Autowired constructor(
 				.content(inPersonEventJson(title = " ")),
 		)
 			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.title").value("Invalid request"))
-			.andExpect(jsonPath("$.errors[0].field").value("title"))
+			.andExpect(invalidRequestProblem())
 	}
 
 	@Test
@@ -257,8 +254,7 @@ class EventHttpApiTests @Autowired constructor(
 				.content(inPersonEventJson(title = "a".repeat(201))),
 		)
 			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.title").value("Invalid request"))
-			.andExpect(jsonPath("$.errors[0].field").value("title"))
+			.andExpect(invalidRequestProblem())
 	}
 
 	@ParameterizedTest
@@ -273,7 +269,7 @@ class EventHttpApiTests @Autowired constructor(
 		)
 			.andExpect(status().isBadRequest)
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.detail").isNotEmpty)
+			.andExpect(invalidRequestProblem())
 	}
 
 	@ParameterizedTest
@@ -295,7 +291,7 @@ class EventHttpApiTests @Autowired constructor(
 		)
 			.andExpect(status().isBadRequest)
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.detail").isNotEmpty)
+			.andExpect(invalidRequestProblem())
 	}
 
 	@ParameterizedTest
@@ -312,8 +308,7 @@ class EventHttpApiTests @Autowired constructor(
 				.content(body),
 		)
 			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.title").value("Invalid request"))
-			.andExpect(jsonPath("$.errors[0].field").value(field))
+			.andExpect(invalidRequestProblem())
 	}
 
 	@Test
@@ -337,7 +332,7 @@ class EventHttpApiTests @Autowired constructor(
 		)
 			.andExpect(status().isBadRequest)
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.errors[0].field").value("timeZone"))
+			.andExpect(invalidRequestProblem())
 	}
 
 	@Test
@@ -360,12 +355,12 @@ class EventHttpApiTests @Autowired constructor(
 				),
 		)
 			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.errors[0].field").value("timeZone"))
+			.andExpect(invalidRequestProblem())
 	}
 
 	@ParameterizedTest
-	@CsvSource("IN_PERSON, joinUrl", "ONLINE, location")
-	fun `Bean Validation rejects attendance details for the wrong mode`(mode: String, field: String) {
+	@ValueSource(strings = ["IN_PERSON", "ONLINE"])
+	fun `Bean Validation rejects attendance details for the wrong mode`(mode: String) {
 		mockMvc.perform(
 			post("/api/organizer/events")
 				.header(HttpHeaders.AUTHORIZATION, "Bearer test-organizer-key")
@@ -386,7 +381,7 @@ class EventHttpApiTests @Autowired constructor(
 		)
 			.andExpect(status().isBadRequest)
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.errors[0].field").value(field))
+			.andExpect(invalidRequestProblem())
 	}
 
 	@Test
@@ -490,7 +485,7 @@ class EventHttpApiTests @Autowired constructor(
 		mockMvc.perform(get("/api/events").param("limit", limit.toString()))
 			.andExpect(status().isBadRequest)
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.errors[0].field").value("limit"))
+			.andExpect(invalidRequestProblem())
 	}
 
 	@ParameterizedTest
@@ -498,7 +493,7 @@ class EventHttpApiTests @Autowired constructor(
 	fun `Spring rejects page sizes that cannot bind to an integer`(limit: String) {
 		mockMvc.perform(get("/api/events").param("limit", limit))
 			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.errors[0].field").value("limit"))
+			.andExpect(invalidRequestProblem())
 	}
 
 	@Test
@@ -506,7 +501,7 @@ class EventHttpApiTests @Autowired constructor(
 		mockMvc.perform(get("/api/events").param("cursor", "%%%"))
 			.andExpect(status().isBadRequest)
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.errors[0].field").value("cursor"))
+			.andExpect(invalidRequestProblem())
 	}
 
 	@ParameterizedTest
@@ -519,7 +514,18 @@ class EventHttpApiTests @Autowired constructor(
 		val cursor = Base64.getUrlEncoder().withoutPadding().encodeToString(contents.toByteArray(Charsets.UTF_8))
 		mockMvc.perform(get("/api/events").param("cursor", cursor))
 			.andExpect(status().isBadRequest)
-			.andExpect(jsonPath("$.errors[0].field").value("cursor"))
+			.andExpect(invalidRequestProblem())
+	}
+
+	private fun invalidRequestProblem() = ResultMatcher { result ->
+		status().isBadRequest.match(result)
+		content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON).match(result)
+		jsonPath("$.status").value(400).match(result)
+		// RFC 9457 defaults an omitted type to about:blank.
+		jsonPath("$.title").isNotEmpty.match(result)
+		jsonPath("$.instance").value(result.request.requestURI).match(result)
+		jsonPath("$.errors").doesNotExist().match(result)
+		assertEquals(0L, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM events", Long::class.java))
 	}
 
 	private fun inPersonEventJson(

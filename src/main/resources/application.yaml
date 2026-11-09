@@ -1,5 +1,8 @@
 spring:
   application:
     name: demo
+  mvc:
+    problemdetails:
+      enabled: true
 organizer:
   api-key: ${ORGANIZER_API_KEY:}
