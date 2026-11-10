@@ -70,6 +70,39 @@ class EventTests {
 		)
 	}
 
+	@ParameterizedTest
+	@ValueSource(strings = ["", " ", "\t\n"])
+	fun `an Event title must not be blank`(title: String) {
+		val result = assertIs<EventCreationResult.Rejected>(publish(title = title))
+
+		assertEquals(listOf(EventViolation("title", "must not be blank")), result.violations)
+	}
+
+	@Test
+	fun `an Event title can contain exactly 200 characters`() {
+		val text = "a".repeat(200)
+
+		val event = assertIs<EventCreationResult.Created>(publish(title = text)).event
+
+		assertEquals(text, event.title.value)
+	}
+
+	@Test
+	fun `an Event title cannot exceed 200 characters`() {
+		val result = assertIs<EventCreationResult.Rejected>(publish(title = "a".repeat(201)))
+
+		assertEquals(listOf(EventViolation("title", "must be at most 200 characters")), result.violations)
+	}
+
+	@Test
+	fun `titles with the same text are equal values`() {
+		val first = assertIs<EventCreationResult.Created>(publish()).event.title
+		val second = assertIs<EventCreationResult.Created>(publish()).event.title
+
+		assertEquals(first, second)
+		assertEquals(first.hashCode(), second.hashCode())
+	}
+
 	@Test
 	fun `publishing reports title and other Event violations together`() {
 		val result = assertIs<EventCreationResult.Rejected>(
