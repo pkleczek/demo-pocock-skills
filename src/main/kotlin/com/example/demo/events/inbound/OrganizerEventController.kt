@@ -1,7 +1,7 @@
 package com.example.demo.events.inbound
 
 import com.fasterxml.jackson.annotation.JsonFormat
-import com.example.demo.events.application.CreateEvent
+import com.example.demo.events.application.EventApplication
 import com.example.demo.events.application.CreateEventCommand
 import com.example.demo.events.domain.AttendanceMode
 import com.example.demo.events.domain.Event
@@ -27,11 +27,11 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/organizer/events")
 class OrganizerEventController(
-	private val createEvent: CreateEvent,
+	private val events: EventApplication,
 ) {
 	@PostMapping
 	fun create(@Valid @RequestBody request: CreateEventRequest): ResponseEntity<*> =
-		when (val result = createEvent.execute(request.toCommand())) {
+		when (val result = events.publish(request.toCommand())) {
 			is EventCreationResult.Created -> ResponseEntity
 				.created(URI.create("/api/events/${result.event.id}"))
 				.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)

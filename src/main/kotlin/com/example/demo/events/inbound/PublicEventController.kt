@@ -2,8 +2,7 @@ package com.example.demo.events.inbound
 
 import com.example.demo.events.application.EventCursor
 import com.example.demo.events.application.EventLookup
-import com.example.demo.events.application.GetEvent
-import com.example.demo.events.application.ListEvents
+import com.example.demo.events.application.EventApplication
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import org.springframework.core.convert.converter.Converter
@@ -21,8 +20,7 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/events")
 class PublicEventController(
-	private val getEvent: GetEvent,
-	private val listEvents: ListEvents,
+	private val events: EventApplication,
 ) {
 	@GetMapping
 	fun list(
@@ -31,7 +29,7 @@ class PublicEventController(
 		@RequestParam(name = "limit", defaultValue = DEFAULT_PAGE_SIZE.toString()) limit: Int,
 		@RequestParam(name = "cursor", required = false) cursor: EventCursor?,
 	): ResponseEntity<*> {
-		val page = listEvents.execute(limit, cursor)
+		val page = events.list(limit, cursor)
 		return ResponseEntity.ok(
 			EventListResponse(
 				items = page.events.map(EventResponse::from),
@@ -41,7 +39,7 @@ class PublicEventController(
 	}
 
 	@GetMapping("/{id}")
-	fun get(@PathVariable id: UUID): ResponseEntity<EventResponse> = when (val result = getEvent.execute(id)) {
+	fun get(@PathVariable id: UUID): ResponseEntity<EventResponse> = when (val result = events.get(id)) {
 		is EventLookup.Found -> ResponseEntity.ok(EventResponse.from(result.event))
 		EventLookup.NotFound -> ResponseEntity.notFound().build()
 	}
