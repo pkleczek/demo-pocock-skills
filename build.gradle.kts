@@ -1,4 +1,5 @@
 plugins {
+	jacoco
 	kotlin("jvm") version "2.3.21"
 	kotlin("plugin.spring") version "2.3.21"
 	id("org.springframework.boot") version "4.1.2"
@@ -59,6 +60,26 @@ kotlin {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+jacoco {
+	toolVersion = "0.8.16"
+}
+
+tasks.test {
+	finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.jacocoTestReport {
+	// A dependency on test would prevent this finalizer from running after test failures.
+	classDirectories.setFrom(sourceSets.main.get().output.classesDirs.asFileTree.matching {
+		exclude("com/example/demo/events/outbound/jooq/**")
+	})
+	reports {
+		html.required = true
+		xml.required = false
+		csv.required = false
+	}
 }
 
 val generatedJooqDirectory = layout.buildDirectory.dir("generated/sources/jooq/main")

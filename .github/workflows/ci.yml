@@ -35,6 +35,9 @@ jobs:
       - name: Run checks
         run: ./gradlew check --no-daemon --stacktrace
 
+      - name: Verify coverage report
+        run: test -f build/reports/jacoco/test/html/index.html
+
       - name: Upload test reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -45,3 +48,19 @@ jobs:
             build/reports/tests/test/
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: Upload coverage report
+        id: coverage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-report
+          path: build/reports/jacoco/test/html/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Link coverage report
+        if: ${{ !cancelled() && steps.coverage.outputs.artifact-url != '' }}
+        env:
+          COVERAGE_URL: ${{ steps.coverage.outputs.artifact-url }}
+        run: echo "[Download HTML coverage report]($COVERAGE_URL) — extract and open index.html." >> "$GITHUB_STEP_SUMMARY"
