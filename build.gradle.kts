@@ -19,6 +19,8 @@ repositories {
 	mavenCentral()
 }
 
+extra["springModulithVersion"] = "2.1.2"
+
 val jooqCodegenSourceSet = sourceSets.create("jooqCodegen") {
 	java.srcDir("src/jooqCodegen/java")
 }
@@ -32,6 +34,7 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.flywaydb:flyway-database-postgresql")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
+	implementation("org.springframework.modulith:spring-modulith-starter-core")
 	implementation("tools.jackson.module:jackson-module-kotlin")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	runtimeOnly("org.postgresql:postgresql")
@@ -41,6 +44,8 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
 	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+	testImplementation("org.springframework.modulith:spring-modulith-starter-test")
+	testImplementation("com.tngtech.archunit:archunit:1.4.2")
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 	testImplementation("org.testcontainers:testcontainers-postgresql")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -50,6 +55,12 @@ dependencies {
 	add(jooqCodegenSourceSet.implementationConfigurationName, "org.flywaydb:flyway-database-postgresql")
 	add(jooqCodegenSourceSet.implementationConfigurationName, "org.testcontainers:testcontainers-postgresql")
 	add(jooqCodegenSourceSet.runtimeOnlyConfigurationName, "org.postgresql:postgresql")
+}
+
+dependencyManagement {
+	imports {
+		mavenBom("org.springframework.modulith:spring-modulith-bom:${property("springModulithVersion")}")
+	}
 }
 
 kotlin {
