@@ -50,6 +50,12 @@ class Event private constructor(
 	val attendanceMode: AttendanceMode get() = attendance.mode
 	val location: String? get() = (attendance as? EventAttendance.InPerson)?.location
 
+	fun register(registrationId: UUID, fullName: String, email: String): RegistrationConfirmationResult =
+		when (status) {
+			EventStatus.PUBLISHED -> Registration.confirm(registrationId, id, fullName, email)
+			EventStatus.CANCELLED -> RegistrationConfirmationResult.EventNotPublished
+		}
+
 	companion object {
 		fun publish(
 			id: UUID,

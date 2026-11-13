@@ -60,7 +60,7 @@ public final class GenerateJooq {
                         .withDatabase(new Database()
                                 .withName("org.jooq.meta.postgres.PostgresDatabase")
                                 .withInputSchema("public")
-                                .withIncludes("events"))
+                                .withIncludes("events|registrations"))
                         .withTarget(new Target()
                                 .withPackageName(GENERATED_PACKAGE)
                                 .withDirectory(generatedDirectory.toAbsolutePath().toString())));
