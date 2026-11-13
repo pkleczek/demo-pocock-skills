@@ -10,7 +10,14 @@ Apply these standards to new and modified code. Keep unrelated code unchanged. W
 - Apply DDD tactical patterns when they clarify the domain. Use entities for concepts with identity and aggregate roots to protect consistency boundaries.
 - Keep source-code dependencies pointing inward: application code may depend on domain code; domain code remains independent of application code and adapters. Keep HTTP, database, and framework-specific types in adapters or configuration, never in the core.
 - Define aggregate repository interfaces in the domain and implement them in outbound adapters. Keep their contracts expressed in domain terms, without application pagination or transport types. Define application-specific query ports and pagination contracts in the application layer; do not combine them into the aggregate repository. One adapter may implement both contracts when this avoids duplicated mapping. Define other outbound ports in the core layer that owns their meaning.
-- Enforce business rules in the domain, not again in request annotations or application services. Inbound validation checks parsing, required fields, request shape, and transport constraints needed before domain construction. For example, validate the required property for a discriminated attendance request in the adapter, but validate title length and non-blank content in the domain. Report transport errors before invoking the use case; map domain rejections to client errors once transport validation succeeds.
+
+### Validation
+
+- Prefer Jakarta Bean Validation on inbound request DTOs for standard input constraints. Use `@NotNull`, `@NotBlank`, `@Size`, `@Min`, `@Max`, and `@Email` instead of equivalent handwritten checks. Use `@Pattern` when no more specific built-in constraint fits. Combine constraints when needed: format and range constraints do not generally require a value to be present.
+- Activate request and nested-object validation with `@Valid`, and use the appropriate Kotlin annotation target, such as `@field:Email`. Rely on Kotlin non-null properties and JSON binding for required-value checks where they already enforce the request contract; avoid redundant annotations.
+- Apply validation to the representation defined by the API contract. If the API accepts values after normalization, such as trimming an email address, perform that normalization before the relevant validation. Keep normalization rules in one authoritative place.
+- Keep business invariants and state transitions in framework-independent domain objects. Request validation does not replace domain enforcement of rules that must hold across entry points—for example, an Event must end after it starts. Keep Jakarta validation annotations outside the domain. Do not repeat request-only checks in domain objects or application services.
+- Reject invalid requests before invoking the use case. Return consistent, structured client errors for request-validation failures and expected domain rejections. Do not expose submitted sensitive values or internal diagnostics in those errors.
 
 ## Feature-based package structure
 
