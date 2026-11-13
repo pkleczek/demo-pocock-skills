@@ -11,10 +11,24 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class EventTests {
-	private val id = UUID.fromString("5319b0e7-387c-40c6-8edc-b4b11fb89c86")
+	private val id = EventId(UUID.fromString("5319b0e7-387c-40c6-8edc-b4b11fb89c86"))
 	private val startAt = Instant.parse("2027-05-10T16:00:00Z")
 	private val endAt = Instant.parse("2027-05-12T18:00:00Z")
 	private val timeZone = ZoneId.of("Europe/Warsaw")
+
+	@Test
+	fun `registering an Attendee preserves the Registration identity and links it to the Event`() {
+		val event = assertIs<EventCreationResult.Created>(publish()).event
+		val registrationId = RegistrationId(UUID.fromString("73cdd62f-0111-4fbe-8b82-0769afef08bd"))
+
+		val registration = assertIs<RegistrationConfirmationResult.Confirmed>(
+			event.register(registrationId, "Ada Lovelace", "ada@example.test"),
+		).registration
+
+		assertEquals(registrationId, registration.id)
+		assertEquals(id, registration.eventId)
+		assertEquals(RegistrationStatus.CONFIRMED, registration.status)
+	}
 
 	@Test
 	fun `an in-person Event is published immediately with its overall multi-day range`() {

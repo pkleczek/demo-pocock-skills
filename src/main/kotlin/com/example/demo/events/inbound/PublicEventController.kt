@@ -3,6 +3,7 @@ package com.example.demo.events.inbound
 import com.example.demo.events.application.EventCursor
 import com.example.demo.events.application.EventLookup
 import com.example.demo.events.application.EventApplication
+import com.example.demo.events.domain.EventId
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import org.springframework.core.convert.converter.Converter
@@ -39,7 +40,7 @@ class PublicEventController(
 	}
 
 	@GetMapping("/{id}")
-	fun get(@PathVariable id: UUID): ResponseEntity<EventResponse> = when (val result = events.get(id)) {
+	fun get(@PathVariable id: UUID): ResponseEntity<EventResponse> = when (val result = events.get(EventId(id))) {
 		is EventLookup.Found -> ResponseEntity.ok(EventResponse.from(result.event))
 		EventLookup.NotFound -> ResponseEntity.notFound().build()
 	}
@@ -57,7 +58,7 @@ data class EventListResponse(
 
 private object EventCursorCodec {
 	fun encode(cursor: EventCursor): String {
-		val value = "${cursor.startAt}|${cursor.id}"
+		val value = "${cursor.startAt}|${cursor.id.value}"
 		return Base64.getUrlEncoder().withoutPadding()
 			.encodeToString(value.toByteArray(Charsets.UTF_8))
 	}
@@ -66,7 +67,7 @@ private object EventCursorCodec {
 		val value = String(Base64.getUrlDecoder().decode(cursor), Charsets.UTF_8)
 		val fields = value.split('|')
 		require(fields.size == 2) { "must be a valid cursor" }
-		return EventCursor(startAt = Instant.parse(fields[0]), id = UUID.fromString(fields[1]))
+		return EventCursor(startAt = Instant.parse(fields[0]), id = EventId(UUID.fromString(fields[1])))
 	}
 }
 

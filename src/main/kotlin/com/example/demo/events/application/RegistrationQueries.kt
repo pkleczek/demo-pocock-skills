@@ -1,8 +1,8 @@
 package com.example.demo.events.application
 
 import com.example.demo.events.domain.Registration
-import java.util.UUID
+import com.example.demo.events.domain.EventId
 
 interface RegistrationQueries {
-	fun findForEvent(eventId: UUID): List<Registration>
+	fun findForEvent(eventId: EventId): List<Registration>
 }

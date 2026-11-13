@@ -3,7 +3,6 @@ package com.example.demo.events.domain
 import java.net.URI
 import java.time.Instant
 import java.time.ZoneId
-import java.util.UUID
 
 enum class AttendanceMode {
 	IN_PERSON,
@@ -38,7 +37,7 @@ sealed interface EventAttendance {
 }
 
 class Event private constructor(
-	val id: UUID,
+	val id: EventId,
 	val title: EventTitle,
 	val description: String?,
 	val startAt: Instant,
@@ -50,7 +49,7 @@ class Event private constructor(
 	val attendanceMode: AttendanceMode get() = attendance.mode
 	val location: String? get() = (attendance as? EventAttendance.InPerson)?.location
 
-	fun register(registrationId: UUID, fullName: String, email: String): RegistrationConfirmationResult =
+	fun register(registrationId: RegistrationId, fullName: String, email: String): RegistrationConfirmationResult =
 		when (status) {
 			EventStatus.PUBLISHED -> Registration.confirm(registrationId, id, fullName, email)
 			EventStatus.CANCELLED -> RegistrationConfirmationResult.EventNotPublished
@@ -58,7 +57,7 @@ class Event private constructor(
 
 	companion object {
 		fun publish(
-			id: UUID,
+			id: EventId,
 			title: String,
 			description: String?,
 			startAt: Instant,
@@ -97,7 +96,7 @@ class Event private constructor(
 		private const val MAX_TITLE_LENGTH = 200
 
 		internal fun reconstitute(
-			id: UUID,
+			id: EventId,
 			title: EventTitle,
 			description: String?,
 			startAt: Instant,

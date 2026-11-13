@@ -33,7 +33,7 @@ class OrganizerEventController(
 	fun create(@Valid @RequestBody request: CreateEventRequest): ResponseEntity<*> =
 		when (val result = events.publish(request.toCommand())) {
 			is EventCreationResult.Created -> ResponseEntity
-				.created(URI.create("/api/events/${result.event.id}"))
+				.created(URI.create("/api/events/${result.event.id.value}"))
 				.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
 				.body(EventResponse.from(result.event))
 			is EventCreationResult.Rejected -> invalidRequest(result.violations)
@@ -94,7 +94,7 @@ data class EventResponse(
 ) {
 	companion object {
 		fun from(event: Event) = EventResponse(
-			id = event.id,
+			id = event.id.value,
 			title = event.title.value,
 			description = event.description,
 			startAt = event.startAt.toString(),

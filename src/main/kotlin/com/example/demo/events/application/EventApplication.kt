@@ -1,6 +1,7 @@
 package com.example.demo.events.application
 
 import com.example.demo.events.domain.Event
+import com.example.demo.events.domain.EventId
 import com.example.demo.events.domain.EventCreationResult
 import com.example.demo.events.domain.EventRepository
 import java.util.UUID
@@ -11,7 +12,7 @@ class EventApplication(
 ) {
 	fun publish(command: CreateEventCommand): EventCreationResult {
 		val result = Event.publish(
-			id = UUID.randomUUID(),
+			id = EventId(UUID.randomUUID()),
 			title = command.title,
 			description = command.description,
 			startAt = command.startAt,
@@ -23,7 +24,7 @@ class EventApplication(
 		return result
 	}
 
-	fun get(id: UUID): EventLookup = queries.findById(id)
+	fun get(id: EventId): EventLookup = queries.findById(id)
 		?.let(EventLookup::Found)
 		?: EventLookup.NotFound
 

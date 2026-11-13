@@ -1,6 +1,7 @@
 package com.example.demo.events.application
 
 import com.example.demo.events.domain.Event
+import com.example.demo.events.domain.EventId
 import com.example.demo.events.domain.EventAttendance
 import com.example.demo.events.domain.EventCreationResult
 import com.example.demo.events.domain.EventRepository
@@ -17,13 +18,13 @@ class EventApplicationTests {
 	private val stored = mutableListOf<Event>()
 	private val repository = object : EventRepository {
 		override fun save(event: Event) { stored += event }
-		override fun findById(id: UUID): Event? = stored.find { it.id == id }
+		override fun findById(id: EventId): Event? = stored.find { it.id == id }
 	}
 	private val queries = object : EventQueries {
-		override fun findById(id: UUID): Event? = stored.find { it.id == id }
+		override fun findById(id: EventId): Event? = stored.find { it.id == id }
 		override fun findPublishedAfter(cursor: EventCursor?, limit: Int): List<Event> = stored
-			.sortedWith(compareBy<Event> { it.startAt }.thenBy { it.id })
-			.filter { cursor == null || it.startAt > cursor.startAt || (it.startAt == cursor.startAt && it.id > cursor.id) }
+			.sortedWith(compareBy<Event> { it.startAt }.thenBy { it.id.value })
+			.filter { cursor == null || it.startAt > cursor.startAt || (it.startAt == cursor.startAt && it.id.value > cursor.id.value) }
 			.take(limit)
 	}
 	private val application = EventApplication(repository, queries)
@@ -48,7 +49,7 @@ class EventApplicationTests {
 		val event = assertIs<EventCreationResult.Created>(application.publish(command())).event
 
 		assertEquals(event, assertIs<EventLookup.Found>(application.get(event.id)).event)
-		assertEquals(EventLookup.NotFound, application.get(UUID(0, 99)))
+		assertEquals(EventLookup.NotFound, application.get(EventId(UUID(0, 99))))
 	}
 
 	@Test
@@ -78,7 +79,7 @@ class EventApplicationTests {
 	}
 
 	private fun event(id: Long): Event = assertIs<EventCreationResult.Created>(Event.publish(
-		id = UUID(0, id),
+		id = EventId(UUID(0, id)),
 		title = "Kotlin Meetup",
 		description = null,
 		startAt = command().startAt,

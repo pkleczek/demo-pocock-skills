@@ -1,7 +1,5 @@
 package com.example.demo.events.domain
 
-import java.util.UUID
-
 @JvmInline
 value class AttendeeName internal constructor(val value: String) {
 	internal fun violations(): List<RegistrationViolation> =
@@ -40,14 +38,14 @@ sealed interface RegistrationConfirmationResult {
 data class RegistrationViolation(val field: String, val message: String)
 
 class Registration private constructor(
-	val id: UUID,
-	val eventId: UUID,
+	val id: RegistrationId,
+	val eventId: EventId,
 	val fullName: AttendeeName,
 	val email: EmailAddress,
 	val status: RegistrationStatus,
 ) {
 	companion object {
-		internal fun confirm(id: UUID, eventId: UUID, fullName: String, email: String): RegistrationConfirmationResult {
+		internal fun confirm(id: RegistrationId, eventId: EventId, fullName: String, email: String): RegistrationConfirmationResult {
 			val emailAddress = EmailAddress.normalize(email)
 			val name = AttendeeName(fullName.trim())
 			val violations = name.violations() + emailAddress.violations()
@@ -58,8 +56,8 @@ class Registration private constructor(
 		}
 
 		internal fun reconstitute(
-			id: UUID,
-			eventId: UUID,
+			id: RegistrationId,
+			eventId: EventId,
 			fullName: AttendeeName,
 			email: EmailAddress,
 			status: RegistrationStatus,

@@ -5,6 +5,7 @@ import com.example.demo.events.application.EventQueries
 import com.example.demo.events.domain.EventRepository
 import com.example.demo.events.domain.AttendanceMode
 import com.example.demo.events.domain.Event
+import com.example.demo.events.domain.EventId
 import com.example.demo.events.domain.EventAttendance
 import com.example.demo.events.domain.EventStatus
 import com.example.demo.events.domain.EventTitle
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Repository
 import java.net.URI
 import java.time.ZoneId
 import java.time.ZoneOffset
-import java.util.UUID
 
 @Repository
 class JooqEventRepository(
@@ -23,7 +23,7 @@ class JooqEventRepository(
 ) : EventRepository, EventQueries {
 	override fun save(event: Event) {
 		dsl.insertInto(EVENTS)
-			.set(EVENTS.ID, event.id)
+			.set(EVENTS.ID, event.id.value)
 			.set(EVENTS.TITLE, event.title.value)
 			.set(EVENTS.DESCRIPTION, event.description)
 			.set(EVENTS.START_AT, event.startAt.atOffset(ZoneOffset.UTC))
@@ -36,8 +36,8 @@ class JooqEventRepository(
 			.execute()
 	}
 
-	override fun findById(id: UUID): Event? = dsl.selectFrom(EVENTS)
-		.where(EVENTS.ID.eq(id))
+	override fun findById(id: EventId): Event? = dsl.selectFrom(EVENTS)
+		.where(EVENTS.ID.eq(id.value))
 		.fetchOne()
 		?.let(::toEvent)
 
@@ -49,7 +49,7 @@ class JooqEventRepository(
 			val cursorStartAt = cursor.startAt.atOffset(ZoneOffset.UTC)
 			query.and(
 				EVENTS.START_AT.gt(cursorStartAt)
-					.or(EVENTS.START_AT.eq(cursorStartAt).and(EVENTS.ID.gt(cursor.id))),
+					.or(EVENTS.START_AT.eq(cursorStartAt).and(EVENTS.ID.gt(cursor.id.value))),
 			)
 		}
 
@@ -67,7 +67,7 @@ class JooqEventRepository(
 		}
 		val title = EventTitle(record.title)
 		return Event.reconstitute(
-			id = record.id,
+			id = EventId(record.id),
 			title = title,
 			description = record.description,
 			startAt = record.startAt.toInstant(),

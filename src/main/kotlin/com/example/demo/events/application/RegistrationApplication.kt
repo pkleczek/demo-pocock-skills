@@ -1,6 +1,8 @@
 package com.example.demo.events.application
 
 import com.example.demo.events.domain.Registration
+import com.example.demo.events.domain.RegistrationId
+import com.example.demo.events.domain.EventId
 import com.example.demo.events.domain.EventAttendance
 import com.example.demo.events.domain.EventRepository
 import com.example.demo.events.domain.RegistrationRepository
@@ -15,9 +17,9 @@ class RegistrationApplication(
 	private val queries: RegistrationQueries,
 	private val events: EventRepository,
 ) {
-	fun register(eventId: UUID, fullName: String, email: String): RegistrationResult {
+	fun register(eventId: EventId, fullName: String, email: String): RegistrationResult {
 		val event = events.findById(eventId) ?: return RegistrationResult.EventNotFound
-		return when (val result = event.register(UUID.randomUUID(), fullName, email)) {
+		return when (val result = event.register(RegistrationId(UUID.randomUUID()), fullName, email)) {
 			is RegistrationConfirmationResult.Confirmed -> when (registrations.save(result.registration)) {
 				RegistrationSaveResult.Saved -> RegistrationResult.Registered(
 					result.registration, (event.attendance as? EventAttendance.Online)?.joinUrl,
@@ -29,7 +31,7 @@ class RegistrationApplication(
 		}
 	}
 
-	fun review(eventId: UUID): RegistrationReview {
+	fun review(eventId: EventId): RegistrationReview {
 		if (events.findById(eventId) == null) return RegistrationReview.EventNotFound
 		return RegistrationReview.Found(queries.findForEvent(eventId))
 	}

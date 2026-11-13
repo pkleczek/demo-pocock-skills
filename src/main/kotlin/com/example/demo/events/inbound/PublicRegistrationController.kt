@@ -3,6 +3,7 @@ package com.example.demo.events.inbound
 import com.example.demo.events.application.RegistrationApplication
 import com.example.demo.events.application.RegistrationResult
 import com.example.demo.events.domain.RegistrationStatus
+import com.example.demo.events.domain.EventId
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
@@ -19,9 +20,9 @@ import java.net.URI
 class PublicRegistrationController(private val registrations: RegistrationApplication) {
 	@PostMapping
 	fun register(@PathVariable eventId: UUID, @RequestBody request: RegisterAttendeeRequest): ResponseEntity<*> =
-		when (val result = registrations.register(eventId, request.fullName, request.email)) {
+		when (val result = registrations.register(EventId(eventId), request.fullName, request.email)) {
 			is RegistrationResult.Registered -> ResponseEntity.status(HttpStatus.CREATED).body(
-				RegistrationResponse(result.registration.id, result.registration.eventId, result.registration.status, result.joinUrl),
+				RegistrationResponse(result.registration.id.value, result.registration.eventId.value, result.registration.status, result.joinUrl),
 			)
 			RegistrationResult.AlreadyRegistered -> {
 				val problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "An active Registration already exists for this email and Event")
