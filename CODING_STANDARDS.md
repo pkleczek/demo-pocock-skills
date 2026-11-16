@@ -11,13 +11,21 @@ Apply these standards to new and modified code. Keep unrelated code unchanged. W
 - Keep source-code dependencies pointing inward: application code may depend on domain code; domain code remains independent of application code and adapters. Keep HTTP, database, and framework-specific types in adapters or configuration, never in the core.
 - Define aggregate repository interfaces in the domain and implement them in outbound adapters. Keep their contracts expressed in domain terms, without application pagination or transport types. Define application-specific query ports and pagination contracts in the application layer; do not combine them into the aggregate repository. One adapter may implement both contracts when this avoids duplicated mapping. Define other outbound ports in the core layer that owns their meaning.
 
-### Validation
+## Validation
 
-- Prefer Jakarta Bean Validation on inbound request DTOs for standard input constraints. Use `@NotNull`, `@NotBlank`, `@Size`, `@Min`, `@Max`, and `@Email` instead of equivalent handwritten checks. Use `@Pattern` when no more specific built-in constraint fits. Combine constraints when needed: format and range constraints do not generally require a value to be present.
-- Activate request and nested-object validation with `@Valid`, and use the appropriate Kotlin annotation target, such as `@field:Email`. Rely on Kotlin non-null properties and JSON binding for required-value checks where they already enforce the request contract; avoid redundant annotations.
-- Apply validation to the representation defined by the API contract. If the API accepts values after normalization, such as trimming an email address, perform that normalization before the relevant validation. Keep normalization rules in one authoritative place.
-- Keep business invariants and state transitions in framework-independent domain objects. Request validation does not replace domain enforcement of rules that must hold across entry points—for example, an Event must end after it starts. Keep Jakarta validation annotations outside the domain. Do not repeat request-only checks in domain objects or application services.
-- Reject invalid requests before invoking the use case. Return consistent, structured client errors for request-validation failures and expected domain rejections. Do not expose submitted sensitive values or internal diagnostics in those errors.
+There are three types of validation.
+
+### Request validation
+
+Prefer Jakarta Bean Validation for request validation. It is a strong fit for the shape of the request: type, required value, length, range, and format. Use `@Valid` on request bodies and nested objects. Use `@NotNull` only for nullable or Java-interop values; `@NotBlank` is not redundant for a non-null string. Use `@Size` for length and `@Pattern` when a built-in constraint is too loose. Reject invalid requests before invoking the use case. Do not repeat request-only checks in domain objects or application services. Keep Jakarta annotations out of the core. Return consistent, structured client errors for request failures; do not expose submitted values or internal diagnostics.
+
+### Value object invariants
+
+A value object invariant protects the validity of a single value. Put it in the value object. A request annotation may repeat it as a fast fail, but the value object is the authority.
+
+### Aggregate invariants
+
+An aggregate invariant protects the validity of an entity's or aggregate's state, including rules across its fields or across several objects—for example, an Event must end after it starts. Put it in the aggregate or the database. Do not move it into a request annotation.
 
 ## Feature-based package structure
 
